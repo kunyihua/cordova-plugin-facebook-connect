@@ -16,7 +16,7 @@
 @interface FacebookConnectPlugin ()
 
 @property (strong, nonatomic) FBSDKLoginManager *loginManager;
-@property (nonatomic, assign) FBSDKLoginTracking *loginTracking;
+@property (nonatomic, assign) FBSDKLoginTracking loginTracking;
 @property (nonatomic, assign) BOOL applicationWasActivated;
 
 - (NSDictionary *)loginResponseObject;
@@ -57,8 +57,8 @@
 }
 
 - (void) applicationDidBecomeActive:(NSNotification *) notification {
-    if (FBSDKSettings.isAutoLogAppEventsEnabled) {
-        [FBSDKAppEvents activateApp];
+    if (FBSDKSettings.sharedSettings.isAutoLogAppEventsEnabled) {
+        [[FBSDKAppEvents shared] activateApp];
     }
     if (self.applicationWasActivated == NO) {
         self.applicationWasActivated = YES;
@@ -76,7 +76,7 @@
 #pragma mark - Cordova commands
 
 - (void)getApplicationId:(CDVInvokedUrlCommand *)command {
-    NSString *appID = FBSDKSettings.appID;
+    NSString *appID = FBSDKSettings.sharedSettings.appID;
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:appID];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
@@ -89,12 +89,12 @@
     }
     
     NSString *appId = [command argumentAtIndex:0];
-    [FBSDKSettings setAppID:appId];
+    FBSDKSettings.sharedSettings.appID = appId;
     [self returnGenericSuccess:command.callbackId];
 }
 
 - (void)getApplicationName:(CDVInvokedUrlCommand *)command {
-    NSString *displayName = FBSDKSettings.displayName;
+    NSString *displayName = FBSDKSettings.sharedSettings.displayName;
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:displayName];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
@@ -107,7 +107,7 @@
     }
     
     NSString *displayName = [command argumentAtIndex:0];
-    [FBSDKSettings setDisplayName:displayName];
+    FBSDKSettings.sharedSettings.displayName = displayName;
     [self returnGenericSuccess:command.callbackId];
 }
 
@@ -119,7 +119,7 @@
     
     BOOL force = [[command argumentAtIndex:0] boolValue];
     if (force) {
-        [FBSDKAccessToken refreshCurrentAccessToken:^(FBSDKGraphRequestConnection *connection, id result, NSError *error) {
+        [FBSDKAccessToken refreshCurrentAccessTokenWithCompletion:^(id<FBSDKGraphRequestConnecting> connection, id result, NSError *error) {
             CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
                                                           messageAsDictionary:[self loginResponseObject]];
             [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
@@ -152,19 +152,19 @@
 
 - (void)setAutoLogAppEventsEnabled:(CDVInvokedUrlCommand *)command {
     BOOL enabled = [[command argumentAtIndex:0] boolValue];
-    [FBSDKSettings setAutoLogAppEventsEnabled:enabled];
+    FBSDKSettings.sharedSettings.autoLogAppEventsEnabled = enabled;
     [self returnGenericSuccess:command.callbackId];
 }
 
 - (void)setAdvertiserIDCollectionEnabled:(CDVInvokedUrlCommand *)command {
     BOOL enabled = [[command argumentAtIndex:0] boolValue];
-    [FBSDKSettings setAdvertiserIDCollectionEnabled:enabled];
+    FBSDKSettings.sharedSettings.advertiserIDCollectionEnabled = enabled;
     [self returnGenericSuccess:command.callbackId];
 }
 
 - (void)setAdvertiserTrackingEnabled:(CDVInvokedUrlCommand *)command {
     BOOL enabled = [[command argumentAtIndex:0] boolValue];
-    [FBSDKSettings setAdvertiserTrackingEnabled:enabled];
+    FBSDKSettings.sharedSettings.advertiserTrackingEnabled = enabled;
     [self returnGenericSuccess:command.callbackId];
 }
 
@@ -177,11 +177,11 @@
 
     NSArray *options = [command argumentAtIndex:0];
     if ([command.arguments count] == 1) {
-        [FBSDKSettings setDataProcessingOptions:options];
+        [FBSDKSettings.sharedSettings setDataProcessingOptions:options];
     } else {
         NSString *country = [command.arguments objectAtIndex:1];
         NSString *state = [command.arguments objectAtIndex:2];
-        [FBSDKSettings setDataProcessingOptions:options country:country state:state];  
+        [FBSDKSettings.sharedSettings setDataProcessingOptions:options country:[country intValue] state:[state intValue]];  
     }
     [self returnGenericSuccess:command.callbackId];
 }
@@ -197,7 +197,7 @@
 
     // this will prevent from being unable to login after updating plugin or changing permissions
     // without refreshing there will be a cache problem. This simple call should fix the problems
-    [FBSDKAccessToken refreshCurrentAccessToken:nil];
+    [FBSDKAccessToken refreshCurrentAccessTokenWithCompletion:nil];
 
     FBSDKLoginManagerLoginResultBlock loginHandler = ^void(FBSDKLoginManagerLoginResult *result, NSError *error) {
         if (error) {
@@ -369,9 +369,7 @@
         if (self.loginManager == nil) {
             self.loginManager = [[FBSDKLoginManager alloc] init];
         }
-        if (self.loginTracking == nil) {
-            self.loginTracking = FBSDKLoginTrackingEnabled;
-        }
+        self.loginTracking = FBSDKLoginTrackingEnabled;
 
         [self.loginManager logOut];
     }
@@ -543,7 +541,7 @@
     if ([self.webView isMemberOfClass:[WKWebView class]]){
         NSString *is_enabled = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"FacebookHybridAppEvents"];
         if([is_enabled isEqualToString:@"true"]){
-            [FBSDKAppEvents augmentHybridWKWebView:(WKWebView*)self.webView];
+            [[FBSDKAppEvents shared] augmentHybridWebView:(WKWebView*)self.webView];
             NSLog(@"FB Hybrid app events are enabled");
         } else {
             NSLog(@"FB Hybrid app events are not enabled");
